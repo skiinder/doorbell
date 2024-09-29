@@ -3,10 +3,12 @@
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include "freertos/event_groups.h"
+#include "esp_camera.h"
 
 #define LOG_TAG "camera_server"
 
-static int wifi_connect_status = 0;
+#define WIFI_CONNECT_BIT BIT0
+#define WIFI_FAIL_BIT BIT1
 static EventGroupHandle_t event_group_handle;
 
 static void event_handler(void *event_handler_arg,
@@ -24,13 +26,20 @@ static void event_handler(void *event_handler_arg,
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
         ESP_LOGE(LOG_TAG, "WiFi disconnected...");
-        wifi_connect_status = 0;
+        xEventGroupSetBits(event_group_handle, WIFI_FAIL_BIT);
         return;
+    }
+
+    if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ESP_LOGI(LOG_TAG, "Got ip address....");
+        xEventGroupSetBits(event_group_handle, WIFI_CONNECT_BIT);
     }
 }
 
 static void camera_server_init()
 {
+    event_group_handle = xEventGroupCreate();
     // 初始化nvs_flash，用于存储wifi配置信息
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -58,7 +67,22 @@ static void camera_server_init()
     esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, event_handler, NULL, NULL);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, event_handler, NULL, NULL);
 
+    wifi_config_t config = {
+        .sta = {
+            .ssid = CONFIG_EXAMPLE_WIFI_SSID,
+            .password = CONFIG_EXAMPLE_WIFI_PASSWORD,
+            .scan_method = CONFIG_EXAMPLE_WIFI_SCAN_METHOD_ALL_CHANNEL ? WIFI_ALL_CHANNEL_SCAN : WIFI_FAST_SCAN}
+
+    };
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &config));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    // 初始化摄像头
+
+    // 等待wifi连接成功
+    xEventGroupWaitBits(event_group_handle,
+                        WIFI_CONNECT_BIT | WIFI_FAIL_BIT,
+                        pdFALSE, pdFALSE, portMAX_DELAY);
 }
