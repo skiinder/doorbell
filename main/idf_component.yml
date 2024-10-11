@@ -1,3 +1,4 @@
 ## IDF Component Manager Manifest File
 dependencies:
   espressif/esp32-camera: "*"
+  espressif/es8311: "*"
