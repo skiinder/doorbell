@@ -12,7 +12,7 @@
 #define LOG_TAG "camera_server"
 #define ES8311_VOLUME 80
 #define ES8311_SAMPLE_RATE 16000
-#define ES8311_MCLK_MULTIPLE I2S_MCLK_MULTIPLE_384
+#define ES8311_MCLK_MULTIPLE I2S_MCLK_MULTIPLE_256
 #define ES8311_MCLK_FREQ_HZ (ES8311_SAMPLE_RATE * ES8311_MCLK_MULTIPLE)
 
 #define PART_BOUNDARY "123456789000000000000987654321"
@@ -44,7 +44,8 @@ static esp_err_t jpeg_handler(httpd_req_t *req)
     {
         return res;
     }
-
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "X-Framerate", "60");
     while (true)
     {
         // 获取图片缓冲区
@@ -61,6 +62,7 @@ static esp_err_t jpeg_handler(httpd_req_t *req)
             {
                 esp_camera_fb_return(fb);
                 res = ESP_FAIL;
+                break;
             }
         }
         else
@@ -109,17 +111,29 @@ static void ws_sync_task(void *arg)
     camera_server_t *cs = arg;
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = malloc(8192);
+    if (!ws_pkt.payload)
+    {
+        ESP_LOGE(LOG_TAG, "Not enough memory for buffer");
+        abort();
+    }
+
     ws_pkt.type = HTTPD_WS_TYPE_BINARY;
     while (cs->talking)
     {
         // 将mic缓存中的数据发送到浏览器
-        ws_pkt.payload = cs->ws_buf;
-        ws_pkt.len = buffer_read(cs->rx_buffer, cs->ws_buf, 8192);
+        ws_pkt.len = buffer_read(cs->mic_buffer, ws_pkt.payload, 8192);
         if (ws_pkt.len > 0)
         {
             httpd_ws_send_frame_async(cs->http_server, cs->ws_fd, &ws_pkt);
         }
+        else
+        {
+            // 喂狗
+            vTaskDelay(1);
+        }
     }
+    vTaskDelete(NULL);
 }
 
 static esp_err_t ws_handler(httpd_req_t *req)
@@ -132,7 +146,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ESP_LOGI(LOG_TAG, "Handshake done, the new connection was opened");
         cs->talking = true;
         cs->ws_fd = httpd_req_to_sockfd(req);
-        xTaskCreate(ws_sync_task, "ws_sync_task", 4096, cs, 2, &cs->ws_sync_task);
+        xTaskCreate(ws_sync_task, "ws_task", 4096, cs, 5, &cs->ws_sync_task);
         return ESP_OK;
     }
 
@@ -165,7 +179,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         // 正确获取数据后，将数据发送到缓存
         if (ret == ESP_OK && cs->talking)
         {
-            buffer_write(cs->tx_buffer, ws_pkt.payload, ws_pkt.len);
+            buffer_write(cs->speaker_buffer, ws_pkt.payload, ws_pkt.len);            
         }
         free(ws_pkt.payload);
     }
@@ -177,6 +191,7 @@ static esp_err_t switch_handler(httpd_req_t *req)
     camera_server_t *cs = req->user_ctx;
     assert(cs);
     cs->talking = !cs->talking;
+    httpd_resp_send(req, NULL,0);
     return ESP_OK;
 }
 
@@ -213,10 +228,12 @@ static void event_handler_on_http_server_start(void *event_handler_arg, esp_even
         .uri = "/",
         .method = HTTP_GET,
         .handler = root_handler,
+        .is_websocket = true,
         .user_ctx = camera_server};
     httpd_uri_t jpeg_uri = {
         .uri = "/jpeg",
         .method = HTTP_GET,
+        .is_websocket = true,
         .handler = jpeg_handler,
         .user_ctx = camera_server};
     httpd_uri_t ws_uri = {
@@ -228,34 +245,13 @@ static void event_handler_on_http_server_start(void *event_handler_arg, esp_even
     httpd_uri_t switch_uri = {
         .uri = "/switch",
         .method = HTTP_GET,
+        .is_websocket = true,
         .handler = switch_handler,
         .user_ctx = camera_server};
     ESP_ERROR_CHECK(httpd_register_uri_handler(camera_server->http_server, &root_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(camera_server->http_server, &jpeg_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(camera_server->http_server, &ws_uri));
     ESP_ERROR_CHECK(httpd_register_uri_handler(camera_server->http_server, &switch_uri));
-}
-
-static IRAM_ATTR bool i2s_send_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx)
-{
-    // 发送回调会在一波数据发送完后被调用，此时从缓存中读取新的数据发送
-    camera_server_t *cs = user_ctx;
-    if (cs->talking)
-    {
-        uint8_t *ptr = *((uint8_t **)event->data);
-        size_t len = buffer_read_from_isr(cs->tx_buffer, ptr, event->size);
-    }
-
-    return true;
-}
-
-static IRAM_ATTR bool i2s_recv_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx)
-{
-    // 接收回调会在一波数据写入DMA后
-    camera_server_t *cs = user_ctx;
-    uint8_t *ptr = *((uint8_t **)event->data);
-    buffer_write_from_isr(cs->rx_buffer, ptr, event->size);
-    return true;
 }
 
 static esp_err_t camera_init()
@@ -284,16 +280,17 @@ static esp_err_t camera_init()
         .ledc_timer = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
 
-        .pixel_format = PIXFORMAT_JPEG,
+        .pixel_format = PIXFORMAT_RGB565,
         .frame_size = FRAMESIZE_240X240,
 
-        .jpeg_quality = 12,
+        .jpeg_quality = 3,
         .fb_count = 1,
         .fb_location = CAMERA_FB_IN_PSRAM,
         .grab_mode = CAMERA_GRAB_WHEN_EMPTY};
 
     // 初始化摄像头
     return esp_camera_init(&camera_config);
+    // return ESP_OK;
 }
 
 static esp_err_t wifi_init()
@@ -335,55 +332,35 @@ static esp_err_t sound_init(camera_server_t *cs)
     gpio_config(&ic);
     gpio_set_level(46, 1);
 
-    i2s_event_callbacks_t cbs = {
-        .on_recv = i2s_recv_callback,
-        .on_recv_q_ovf = NULL,
-        .on_sent = i2s_send_callback,
-        .on_send_q_ovf = NULL};
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM, I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true; // Auto clear the legacy data in the DMA buffer
-    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &cs->tx_handle, &cs->rx_handle));
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &cs->speaker_handle, &cs->mic_handle));
     i2s_std_config_t std_cfg =
-        // {
-        //     .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
-        //     .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(ES8311_SAMPLE_RATE),
-        //     .gpio_cfg = {
-        //         .bclk = I2S_BCK_IO,
-        //         .mclk = I2S_MCK_IO,
-        //         .din = I2S_DI_IO,
-        //         .dout = I2S_DO_IO,
-        //         .ws = I2S_WS_IO,
-        //         .invert_flags = {false, false, false},
-        //     },
-        // };
-    {
-        .clk_cfg = {
-            .clk_src = I2S_CLK_SRC_DEFAULT,
-            .mclk_multiple = ES8311_MCLK_MULTIPLE,
-            .sample_rate_hz = ES8311_SAMPLE_RATE},
+        {
+            .clk_cfg = {
+                .clk_src = I2S_CLK_SRC_DEFAULT,
+                .mclk_multiple = ES8311_MCLK_MULTIPLE,
+                .sample_rate_hz = ES8311_SAMPLE_RATE},
 
-        // .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
-        .gpio_cfg = {
-            .mclk = I2S_MCK_IO,
-            .bclk = I2S_BCK_IO,
-            .ws = I2S_WS_IO,
-            .dout = I2S_DO_IO,
-            .din = I2S_DI_IO,
-            .invert_flags = {
-                .mclk_inv = false,
-                .bclk_inv = false,
-                .ws_inv = false,
+            .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+            .gpio_cfg = {
+                .mclk = I2S_MCK_IO,
+                .bclk = I2S_BCK_IO,
+                .ws = I2S_WS_IO,
+                .dout = I2S_DO_IO,
+                .din = I2S_DI_IO,
+                .invert_flags = {
+                    .mclk_inv = false,
+                    .bclk_inv = false,
+                    .ws_inv = false,
+                },
             },
-        },
-    };
+        };
 
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(cs->tx_handle, &std_cfg));
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(cs->rx_handle, &std_cfg));
-    ESP_ERROR_CHECK(i2s_channel_register_event_callback(cs->rx_handle, &cbs, cs));
-    ESP_ERROR_CHECK(i2s_channel_register_event_callback(cs->tx_handle, &cbs, cs));
-    ESP_ERROR_CHECK(i2s_channel_enable(cs->tx_handle));
-    ESP_ERROR_CHECK(i2s_channel_enable(cs->rx_handle));
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(cs->speaker_handle, &std_cfg));
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(cs->mic_handle, &std_cfg));
+    ESP_ERROR_CHECK(i2s_channel_enable(cs->speaker_handle));
+    ESP_ERROR_CHECK(i2s_channel_enable(cs->mic_handle));
 
     /* Initialize I2C peripheral */
     const i2c_config_t es8311_i2c_cfg = {
@@ -409,12 +386,61 @@ static esp_err_t sound_init(camera_server_t *cs)
 
     ESP_ERROR_CHECK(es8311_init(es_handle, &es_clk, ES8311_RESOLUTION_16, ES8311_RESOLUTION_16));
     ESP_RETURN_ON_ERROR(es8311_sample_frequency_config(es_handle, ES8311_MCLK_FREQ_HZ, ES8311_SAMPLE_RATE), LOG_TAG, "set es8311 sample frequency failed");
-    ESP_RETURN_ON_ERROR(es8311_microphone_config(es_handle, false), LOG_TAG, "set es8311 microphone failed");
-    ESP_RETURN_ON_ERROR(es8311_microphone_gain_set(es_handle, ES8311_MIC_GAIN_24DB), LOG_TAG, "set es8311 microphone gain failed");
-
     ESP_RETURN_ON_ERROR(es8311_voice_volume_set(es_handle, ES8311_VOLUME, NULL), LOG_TAG, "set es8311 volume failed");
+    ESP_RETURN_ON_ERROR(es8311_microphone_config(es_handle, false), LOG_TAG, "set es8311 microphone failed");
+    ESP_RETURN_ON_ERROR(es8311_microphone_gain_set(es_handle, ES8311_MIC_GAIN_6DB), LOG_TAG, "set es8311 microphone gain failed");
 
     return ESP_OK;
+}
+
+static void mic_sync_task(void *args)
+{
+    void *buf = malloc(2048);
+    if (!buf)
+    {
+        ESP_LOGE(LOG_TAG, "Not enough memory");
+        abort();
+    }
+
+    size_t actual_len = 0;
+    camera_server_t *cs = args;
+    while (true)
+    {
+        if (i2s_channel_read(cs->mic_handle, buf, 2048, &actual_len, 100) == ESP_OK)
+        {
+            buffer_write(cs->mic_buffer, buf, actual_len);
+        }
+        else
+        {
+            vTaskDelay(1);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
+static void speaker_sync_task(void *args)
+{
+    void *buf = malloc(2048);
+    if (!buf)
+    {
+        ESP_LOGE(LOG_TAG, "Not enough memory");
+        abort();
+    }
+    size_t len;
+    camera_server_t *cs = args;
+    while (true)
+    {
+        len = buffer_read(cs->speaker_buffer, buf, 2048);
+        if (len)
+        {
+            i2s_channel_write(cs->speaker_handle, buf, len, &len, 100);
+        }
+        else
+        {
+            vTaskDelay(1);
+        }
+    }
+    vTaskDelete(NULL);
 }
 
 esp_err_t camera_server_init(camera_server_t *camera_server)
@@ -436,19 +462,25 @@ esp_err_t camera_server_init(camera_server_t *camera_server)
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, event_handler_on_ip_got, camera_server);
     esp_event_handler_register(ESP_HTTP_SERVER_EVENT, HTTP_SERVER_EVENT_START, event_handler_on_http_server_start, camera_server);
 
-    ESP_ERROR_CHECK(buffer_init(&camera_server->rx_buffer, 16384));
-    ESP_ERROR_CHECK(buffer_init(&camera_server->tx_buffer, 16384));
+    ESP_ERROR_CHECK(buffer_init(&camera_server->mic_buffer, 16384));
+    ESP_ERROR_CHECK(buffer_init(&camera_server->speaker_buffer, 16384));
     ESP_ERROR_CHECK(camera_init());
     ESP_ERROR_CHECK(wifi_init());
     ESP_ERROR_CHECK(sound_init(camera_server));
+
+    xTaskCreate(speaker_sync_task, "speaker_sync", 4096, camera_server, 5, &camera_server->speaker_sync_task);
+    xTaskCreate(mic_sync_task, "mic_sync", 4096, camera_server, 5, &camera_server->mic_sync_task);
 
     return ESP_OK;
 }
 
 esp_err_t camera_server_deinit(camera_server_t *camera_server)
 {
-    buffer_deinit(camera_server->rx_buffer);
-    buffer_deinit(camera_server->tx_buffer);
+    camera_server->talking = false;
+    vTaskDelete(camera_server->mic_sync_task);
+    vTaskDelete(camera_server->speaker_sync_task);
+    buffer_deinit(camera_server->mic_buffer);
+    buffer_deinit(camera_server->speaker_buffer);
     ESP_ERROR_CHECK(esp_wifi_disconnect());
     return ESP_OK;
 }
