@@ -1,19 +1,10 @@
-#include "buffer.h"
+#include "doorbell_buffer.h"
 #include "string.h"
 
 
-typedef struct
+esp_err_t doorbell_buffer_init(doorbell_buffer_handle_t *buffer_handle, size_t size)
 {
-    void *ptr;
-    size_t size;
-    size_t start;
-    size_t len;
-    portMUX_TYPE mutex;
-} buffer_obj;
-
-esp_err_t buffer_init(buffer_handle_t *buffer_handle, size_t size)
-{
-    buffer_obj *buffer = malloc(sizeof(buffer_obj));
+    doorbell_buffer_obj *buffer = malloc(sizeof(doorbell_buffer_obj));
     if (!buffer)
     {
         goto HANDLE_MALLOC_FAIL;
@@ -38,7 +29,7 @@ HANDLE_MALLOC_FAIL:
     return ESP_ERR_NO_MEM;
 }
 
-static inline void buffer_read_internal(buffer_obj *buffer, void *dest, size_t len)
+static inline void buffer_read_internal(doorbell_buffer_obj *buffer, void *dest, size_t len)
 {
     if (buffer->start + len > buffer->size)
     {
@@ -55,11 +46,11 @@ static inline void buffer_read_internal(buffer_obj *buffer, void *dest, size_t l
     buffer->len -= len;
 }
 
-size_t buffer_read(buffer_handle_t buffer_handle, void *dest, size_t len)
+size_t doorbell_buffer_read(doorbell_buffer_handle_t buffer_handle, void *dest, size_t len)
 {
     assert(buffer_handle);
     assert(dest);
-    buffer_obj *buffer = buffer_handle;
+    doorbell_buffer_obj *buffer = buffer_handle;
     if (len > buffer->len)
     {
         len = buffer->len;
@@ -76,11 +67,11 @@ size_t buffer_read(buffer_handle_t buffer_handle, void *dest, size_t len)
     return len;
 }
 
-size_t buffer_read_from_isr(buffer_handle_t buffer_handle, void *dest, size_t len)
+size_t doorbell_buffer_read_from_isr(doorbell_buffer_handle_t buffer_handle, void *dest, size_t len)
 {
     assert(buffer_handle);
     assert(dest);
-    buffer_obj *buffer = buffer_handle;
+    doorbell_buffer_obj *buffer = buffer_handle;
     if (len > buffer->len)
     {
         len = buffer->len;
@@ -98,7 +89,7 @@ size_t buffer_read_from_isr(buffer_handle_t buffer_handle, void *dest, size_t le
     return len;
 }
 
-static inline void buffer_write_internal(buffer_obj *buffer, void *buf, size_t len)
+static inline void buffer_write_internal(doorbell_buffer_obj *buffer, void *buf, size_t len)
 {
     if (buffer->len + len > buffer->size)
     {
@@ -131,11 +122,11 @@ static inline void buffer_write_internal(buffer_obj *buffer, void *buf, size_t l
     buffer->len += len;
 }
 
-void buffer_write(buffer_handle_t buffer_handle, void *buf, size_t len)
+void doorbell_buffer_write(doorbell_buffer_handle_t buffer_handle, void *buf, size_t len)
 {
     assert(buffer_handle);
     assert(buf);
-    buffer_obj *buffer = buffer_handle;
+    doorbell_buffer_obj *buffer = buffer_handle;
     if (len == 0)
     {
         return;
@@ -152,11 +143,11 @@ void buffer_write(buffer_handle_t buffer_handle, void *buf, size_t len)
     portEXIT_CRITICAL(&buffer->mutex);
 }
 
-void buffer_write_from_isr(buffer_handle_t buffer_handle, void *buf, size_t len)
+void doorbell_buffer_write_from_isr(doorbell_buffer_handle_t buffer_handle, void *buf, size_t len)
 {
     assert(buffer_handle);
     assert(buf);
-    buffer_obj *buffer = buffer_handle;
+    doorbell_buffer_obj *buffer = buffer_handle;
     if (len == 0)
     {
         return;
@@ -172,13 +163,13 @@ void buffer_write_from_isr(buffer_handle_t buffer_handle, void *buf, size_t len)
     portEXIT_CRITICAL_ISR(&buffer->mutex);
 }
 
-esp_err_t buffer_deinit(buffer_handle_t buffer_handle)
+esp_err_t doorbell_buffer_deinit(doorbell_buffer_handle_t buffer_handle)
 {
     if (!buffer_handle)
     {
         return ESP_FAIL;
     }
-    buffer_obj *buffer = buffer_handle;
+    doorbell_buffer_obj *buffer = buffer_handle;
     free(buffer->ptr);
     free(buffer);
     return ESP_OK;

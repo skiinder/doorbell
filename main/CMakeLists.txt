@@ -1,2 +1,8 @@
-idf_component_register(SRCS "camera_server.c" "buffer.c" "main.c"
-                    INCLUDE_DIRS ".")
+idf_component_register(SRCS 
+                        "doorbell_buffer.c" 
+                        "doorbell_camera.c" 
+                        "doorbell_httpd.c" 
+                        "doorbell_sound.c" 
+                        "doorbell_main.c"
+                        "doorbell_wifi.c"
+                        INCLUDE_DIRS ".")

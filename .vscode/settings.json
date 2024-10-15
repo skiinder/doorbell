@@ -30,7 +30,13 @@
         "functional": "c",
         "task.h": "c",
         "freertos.h": "c",
-        "portmacro.h": "c"
+        "portmacro.h": "c",
+        "esp_http_server.h": "c",
+        "event_groups.h": "c",
+        "i2s_std.h": "c",
+        "esp_check.h": "c",
+        "esp_err.h": "c",
+        "doorbell_config.h": "c"
     },
     "idf.flashType": "UART",
     "idf.espIdfPathWin": "C:\\Users\\skiin\\esp\\v5.0.6\\esp-idf",
