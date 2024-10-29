@@ -26,7 +26,7 @@ void doorbell_camera_init()
         .pin_href = CAM_PIN_HREF,
         .pin_pclk = CAM_PIN_PCLK,
 
-        .xclk_freq_hz = 20000000,
+        .xclk_freq_hz = 10000000,
         .ledc_timer = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
 

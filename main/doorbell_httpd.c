@@ -10,6 +10,15 @@ static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" 
 static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
 static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\n\r\n";
 
+static uint32_t httpd_status; // 记录httpd状态 位0、1记录是否启动 位2、3、4、5记录uri_handler注册状态
+
+#define HTTPD_SERVER_START 0x1
+#define STREAM_SERVER_START 0x2
+#define ROOT_URI_REGISTER 0x4
+#define JPEG_URI_REGISTER 0x8
+#define SWITCH_URI_REGISTER 0x10
+#define WS_URI_REGISTER 0x20
+
 static esp_err_t root_handler(httpd_req_t *req)
 {
     return ESP_OK;
@@ -97,7 +106,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ESP_LOGI(TAG, "Handshake done, the new connection was opened");
         handle->talking = true;
         handle->ws_fd = httpd_req_to_sockfd(req);
-        xTaskCreate(ws_sync_task, "ws_task", 4096, handle, 5, &handle->ws_sync_task);
+        xTaskCreate(ws_sync_task, "ws_task", 4096, handle, 1, &handle->ws_sync_task);
         return ESP_OK;
     }
 
@@ -151,6 +160,7 @@ esp_err_t doorbell_httpd_init(doorbell_httpd_handle_t *doorbell_httpd_handle,
     handle->speaker_buffer = speaker_buffer;
 
     *doorbell_httpd_handle = handle;
+    httpd_status = 0;
     return ESP_OK;
 }
 
@@ -161,7 +171,9 @@ void doorbell_httpd_start(doorbell_httpd_handle_t doorbell_httpd_handle)
     stream_config.server_port = 81;
     stream_config.ctrl_port = 32769;
     ESP_ERROR_CHECK(httpd_start(&doorbell_httpd_handle->http_server, &http_config));
+    httpd_status |= HTTPD_SERVER_START;
     ESP_ERROR_CHECK(httpd_start(&doorbell_httpd_handle->stream_server, &stream_config));
+    httpd_status |= STREAM_SERVER_START;
 
     ESP_LOGI(TAG, "Registering uri handlers...");
     httpd_uri_t root_uri = {
@@ -189,20 +201,47 @@ void doorbell_httpd_start(doorbell_httpd_handle_t doorbell_httpd_handle)
         .handler = switch_handler,
         .user_ctx = doorbell_httpd_handle};
     ESP_ERROR_CHECK(httpd_register_uri_handler(doorbell_httpd_handle->http_server, &root_uri));
+    httpd_status |= ROOT_URI_REGISTER;
     ESP_ERROR_CHECK(httpd_register_uri_handler(doorbell_httpd_handle->stream_server, &jpeg_uri));
+    httpd_status |= JPEG_URI_REGISTER;
     ESP_ERROR_CHECK(httpd_register_uri_handler(doorbell_httpd_handle->http_server, &ws_uri));
+    httpd_status |= WS_URI_REGISTER;
     ESP_ERROR_CHECK(httpd_register_uri_handler(doorbell_httpd_handle->http_server, &switch_uri));
+    httpd_status |= SWITCH_URI_REGISTER;
 }
 
 void doorbell_httpd_stop(doorbell_httpd_handle_t doorbell_httpd_handle)
 {
-    ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->http_server, "/", HTTP_GET));
-    ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->stream_server, "/jpeg", HTTP_GET));
-    ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->http_server, "/ws", HTTP_GET));
-    ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->http_server, "/switch", HTTP_GET));
-
-    ESP_ERROR_CHECK(httpd_stop(doorbell_httpd_handle->http_server));
-    ESP_ERROR_CHECK(httpd_stop(doorbell_httpd_handle->stream_server));
+    if (httpd_status & SWITCH_URI_REGISTER)
+    {
+        ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->http_server, "/switch", HTTP_GET));
+        httpd_status &= ~SWITCH_URI_REGISTER;
+    }
+    if (httpd_status & WS_URI_REGISTER)
+    {
+        ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->http_server, "/ws", HTTP_GET));
+        httpd_status &= ~WS_URI_REGISTER;
+    }
+    if (httpd_status & JPEG_URI_REGISTER)
+    {
+        ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->stream_server, "/jpeg", HTTP_GET));
+        httpd_status &= ~JPEG_URI_REGISTER;
+    }
+    if (httpd_status & ROOT_URI_REGISTER)
+    {
+        ESP_ERROR_CHECK(httpd_unregister_uri_handler(doorbell_httpd_handle->http_server, "/", HTTP_GET));
+        httpd_status &= ~ROOT_URI_REGISTER;
+    }
+    if (httpd_status & HTTPD_SERVER_START)
+    {
+        ESP_ERROR_CHECK(httpd_stop(doorbell_httpd_handle->http_server));
+        httpd_status &= ~HTTPD_SERVER_START;
+    }
+    if (httpd_status & STREAM_SERVER_START)
+    {
+        ESP_ERROR_CHECK(httpd_stop(doorbell_httpd_handle->stream_server));
+        httpd_status &= ~STREAM_SERVER_START;
+    }
 }
 
 void doorbell_httpd_deinit(doorbell_httpd_handle_t doorbell_httpd_handle)

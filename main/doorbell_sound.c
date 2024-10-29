@@ -156,8 +156,8 @@ void doorbell_sound_start(doorbell_sound_handle_t handle)
 {
     ESP_ERROR_CHECK(i2s_channel_enable(handle->speaker_handle));
     ESP_ERROR_CHECK(i2s_channel_enable(handle->mic_handle));
-    assert(xTaskCreate(speaker_sync_task, "speaker_task", 4096, handle, 5, &handle->speaker_sync_task) == pdTRUE);
-    assert(xTaskCreate(mic_sync_task, "mic_task", 4096, handle, 5, &handle->mic_sync_task) == pdTRUE);
+    assert(xTaskCreate(speaker_sync_task, "speaker_task", 4096, handle, 1, &handle->speaker_sync_task) == pdTRUE);
+    assert(xTaskCreate(mic_sync_task, "mic_task", 4096, handle, 1, &handle->mic_sync_task) == pdTRUE);
 }
 
 void doorbell_sound_stop(doorbell_sound_handle_t handle)

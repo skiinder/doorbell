@@ -1,0 +1,35 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"flash.h": "c",
+			"wifi.h": "c",
+			"esp_netif.h": "c",
+			"esp_netif_defaults.h": "c",
+			"esp_wifi.h": "c",
+			"wifi_connect.h": "c",
+			"esp_camera.h": "c",
+			"esp_compiler.h": "c",
+			"camera_server_config.h": "c",
+			"esp_log.h": "c",
+			"soc_caps.h": "c",
+			"functional": "c",
+			"task.h": "c",
+			"freertos.h": "c",
+			"portmacro.h": "c",
+			"esp_http_server.h": "c",
+			"event_groups.h": "c",
+			"i2s_std.h": "c",
+			"esp_check.h": "c",
+			"esp_err.h": "c",
+			"doorbell_config.h": "c",
+			"array": "c",
+			"string": "c",
+			"string_view": "c"
+		}
+	}
+}
