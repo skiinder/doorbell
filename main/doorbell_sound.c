@@ -10,27 +10,32 @@
 #include "esp_audio_dec.h"
 #include "esp_audio_dec_default.h"
 #include "driver/i2s_std.h"
-#include "driver/i2c_master.h"
+#include "driver/i2c.h"
 
 #define TAG "doorbell_sound"
 #define ES8311_VOLUME 80
 #define ES8311_SAMPLE_RATE 16000
 #define ES8311_MCLK_MULTIPLE I2S_MCLK_MULTIPLE_256
 #define ES8311_MCLK_FREQ_HZ (ES8311_SAMPLE_RATE * ES8311_MCLK_MULTIPLE)
+#define ES8311_CHANNEL ESP_AUDIO_MONO
+#define ES8311_BIT ESP_AUDIO_BIT16
 
 #define MIC_MESSAGE_LEN 2040
 
-static void doorbell_board_i2c_init(i2c_master_bus_handle_t *i2c_bus_handle)
+static void doorbell_board_i2c_init()
 {
-    i2c_master_bus_config_t i2c_bus_cfg = {
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .scl_io_num = I2C_SCL_IO,
+    i2c_config_t i2c_cfg = {
+        .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_SDA_IO,
-        .i2c_port = I2C_NUM,
-        .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = true,
+        .scl_io_num = I2C_SCL_IO,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .clk_flags = I2C_SCLK_SRC_FLAG_LIGHT_SLEEP,
+        .master.clk_speed = 100000,
     };
-    i2c_new_master_bus(&i2c_bus_cfg, i2c_bus_handle);
+
+    ESP_ERROR_CHECK(i2c_param_config(I2C_NUM, &i2c_cfg));
+    ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM, I2C_MODE_MASTER, 0, 0, 0));
 }
 static void doorbell_sound_i2s_init(i2s_chan_handle_t *speaker_handle, i2s_chan_handle_t *mic_handle)
 {
@@ -44,7 +49,7 @@ static void doorbell_sound_i2s_init(i2s_chan_handle_t *speaker_handle, i2s_chan_
                 .mclk_multiple = ES8311_MCLK_MULTIPLE,
                 .sample_rate_hz = ES8311_SAMPLE_RATE,
             },
-            .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(ESP_AUDIO_BIT16, ESP_AUDIO_MONO),
+            .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(ES8311_BIT, ES8311_CHANNEL),
             .gpio_cfg = {
                 .mclk = I2S_MCK_IO,
                 .bclk = I2S_BCK_IO,
@@ -65,7 +70,7 @@ static void doorbell_sound_i2s_init(i2s_chan_handle_t *speaker_handle, i2s_chan_
     ESP_ERROR_CHECK(i2s_channel_enable(*mic_handle));
 }
 
-static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan_handle_t mic_handle, i2c_master_bus_handle_t i2c_bus_handle, doorbell_sound_handle_t sound)
+static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan_handle_t mic_handle, doorbell_sound_handle_t sound)
 {
     audio_codec_i2s_cfg_t i2s_cfg = {
         .rx_handle = mic_handle,
@@ -78,7 +83,6 @@ static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan
     audio_codec_i2c_cfg_t i2c_cfg = {
         .addr = ES8311_CODEC_DEFAULT_ADDR,
         .port = I2C_NUM,
-        .bus_handle = i2c_bus_handle,
     };
     const audio_codec_ctrl_if_t *out_ctrl_if = audio_codec_new_i2c_ctrl(&i2c_cfg);
     assert(out_ctrl_if);
@@ -107,8 +111,8 @@ static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan
     sound->codec_dev = esp_codec_dev_new(&dev_cfg);
     assert(sound->codec_dev);
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(sound->codec_dev, 60.0));
-    sound->sample_info.bits_per_sample = ESP_AUDIO_BIT16;
-    sound->sample_info.channel = ESP_AUDIO_MONO;
+    sound->sample_info.bits_per_sample = ES8311_BIT;
+    sound->sample_info.channel = ES8311_CHANNEL;
     sound->sample_info.sample_rate = ES8311_SAMPLE_RATE;
     sound->sample_info.mclk_multiple = ES8311_MCLK_MULTIPLE;
     sound->sample_info.channel_mask = ESP_CODEC_DEV_MAKE_CHANNEL_MASK(0);
@@ -116,18 +120,33 @@ static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan
     ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(sound->codec_dev, 30.0));
 }
 
-// static void doorbell_sound_encoder_init()
-// {
-//     ESP_ERROR_CHECK(esp_aac_enc_register());
-//     ESP_ERROR_CHECK(esp_aac_dec_register());
-//     esp_aac_enc_config_t cfg = {
-//         .sample_rate = ES8311_SAMPLE_RATE,
-//         .bits_per_sample = ESP_AUDIO_BIT16,
-//         .bitrate = 64000,
-//         .channel = ESP_AUDIO_DUAL,
-//         .adts_used = true,
-//     };
-// }
+static void doorbell_sound_encoder_init(doorbell_sound_handle_t sound)
+{
+    // 初始化音频编解码器
+    esp_aac_enc_config_t aac_cfg = {
+        .sample_rate = ES8311_SAMPLE_RATE,
+        .bits_per_sample = ES8311_BIT,
+        .bitrate = 64000,
+        .channel = ES8311_CHANNEL,
+        .adts_used = true,
+    };
+
+    esp_audio_enc_config_t enc_cfg = {
+        .cfg = &aac_cfg,
+        .cfg_sz = sizeof(esp_alac_enc_config_t),
+        .type = ESP_AUDIO_TYPE_AAC,
+    };
+
+    esp_audio_enc_open(&enc_cfg, &sound->enc_handle);
+
+    esp_aac_dec_cfg_t dec_cfg = {
+        .sample_rate = ES8311_SAMPLE_RATE,
+        .bits_per_sample = ESP_AUDIO_BIT16,
+        .channel = ESP_AUDIO_DUAL,
+        .aac_plus_enable = false,
+        .no_adts_header = false,
+    };
+}
 static void mic_sync_task(void *args)
 {
     doorbell_sound_obj *sound = args;
@@ -183,13 +202,12 @@ esp_err_t doorbell_sound_init(doorbell_sound_handle_t *handle,
     ESP_RETURN_ON_FALSE(sound, ESP_ERR_NO_MEM, TAG, "doorbell_sound_handle malloc failed");
     *handle = sound;
     i2s_chan_handle_t speaker_handle = NULL, mic_handle = NULL;
-    i2c_master_bus_handle_t i2c_bus = NULL;
     // 使能功放
-    doorbell_board_i2c_init(&i2c_bus);
+    doorbell_board_i2c_init();
     doorbell_sound_i2s_init(&speaker_handle, &mic_handle);
     assert(mic_handle);
     assert(speaker_handle);
-    doorbell_sound_codec_init(speaker_handle, mic_handle, i2c_bus, sound);
+    doorbell_sound_codec_init(speaker_handle, mic_handle, sound);
     sound->mic_ringbuf = mic_ringbuf;
     sound->speaker_ringbuf = speaker_ringbuf;
 

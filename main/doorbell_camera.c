@@ -12,6 +12,8 @@ void doorbell_camera_init()
         .pin_pwdn = CAM_PIN_PWDN,
         .pin_reset = CAM_PIN_RESET,
         .pin_xclk = CAM_PIN_XCLK,
+        .pin_sccb_scl = -1,
+        .pin_sccb_sda = -1,
         .sccb_i2c_port = I2C_NUM,
 
         .pin_d7 = CAM_PIN_D7,
@@ -36,7 +38,8 @@ void doorbell_camera_init()
         .jpeg_quality = 30,
         .fb_count = 1,
         .fb_location = CAMERA_FB_IN_PSRAM,
-        .grab_mode = CAMERA_GRAB_LATEST};
+        .grab_mode = CAMERA_GRAB_LATEST,
+    };
 
     // 初始化摄像头
     ESP_ERROR_CHECK(esp_camera_init(&camera_config));

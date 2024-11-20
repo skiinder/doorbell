@@ -2,7 +2,6 @@
 #define __DOORBELL_SOUND_H__
 
 #include "driver/i2s_std.h"
-#include "doorbell_buffer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -15,6 +14,9 @@ typedef struct
     TaskHandle_t mic_sync_task;
     esp_codec_dev_handle_t codec_dev;
     esp_codec_dev_sample_info_t sample_info;
+    esp_audio_enc_info_t enc_info;
+    esp_audio_enc_handle_t enc_handle;
+    esp_audio_dec_handle_t dec_handle;
     RingbufHandle_t mic_ringbuf;
     RingbufHandle_t speaker_ringbuf;
 } doorbell_sound_obj;
