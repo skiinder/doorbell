@@ -3,6 +3,7 @@
 #include "esp_check.h"
 
 #define TAG "doorbell_camera"
+static camera_fb_t *fb = NULL;
 
 void doorbell_camera_init()
 {
@@ -11,8 +12,7 @@ void doorbell_camera_init()
         .pin_pwdn = CAM_PIN_PWDN,
         .pin_reset = CAM_PIN_RESET,
         .pin_xclk = CAM_PIN_XCLK,
-        .pin_sccb_sda = CAM_PIN_SIOD,
-        .pin_sccb_scl = CAM_PIN_SIOC,
+        .sccb_i2c_port = I2C_NUM,
 
         .pin_d7 = CAM_PIN_D7,
         .pin_d6 = CAM_PIN_D6,
@@ -30,10 +30,10 @@ void doorbell_camera_init()
         .ledc_timer = LEDC_TIMER_0,
         .ledc_channel = LEDC_CHANNEL_0,
 
-        .pixel_format = PIXFORMAT_RGB565,
+        .pixel_format = PIXFORMAT_JPEG,
         .frame_size = FRAMESIZE_240X240,
 
-        .jpeg_quality = 3,
+        .jpeg_quality = 30,
         .fb_count = 1,
         .fb_location = CAMERA_FB_IN_PSRAM,
         .grab_mode = CAMERA_GRAB_LATEST};
@@ -44,19 +44,33 @@ void doorbell_camera_init()
 
 esp_err_t doorbell_camera_getJpgFrame(uint8_t **data, size_t *size)
 {
-    camera_fb_t *fb = esp_camera_fb_get();
+    fb = esp_camera_fb_get();
     ESP_RETURN_ON_FALSE(fb, ESP_FAIL, TAG, "Camera capture failed");
-
-    bool jpeg_converted = frame2jpg(fb, 80, data, size);
-    esp_camera_fb_return(fb);
-    ESP_RETURN_ON_FALSE(jpeg_converted, ESP_FAIL, TAG, "JPEG conversion failed");
+    if (fb->format == PIXFORMAT_JPEG)
+    {
+        *data = fb->buf;
+        *size = fb->len;
+    }
+    else
+    {
+        bool jpeg_converted = frame2jpg(fb, 80, data, size);
+        esp_camera_fb_return(fb);
+        ESP_RETURN_ON_FALSE(jpeg_converted, ESP_FAIL, TAG, "JPEG conversion failed");
+    }
 
     return ESP_OK;
 }
 
 void doorbell_camera_freeJpgFrame(uint8_t *data)
 {
-    free(data);
+    if (fb && fb->format == PIXFORMAT_JPEG)
+    {
+        esp_camera_fb_return(fb);
+    }
+    else
+    {
+        free(data);
+    }
 }
 
 void doorbell_camera_deinit()

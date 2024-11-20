@@ -12,6 +12,9 @@ static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %
 
 static uint32_t httpd_status; // 记录httpd状态 位0、1记录是否启动 位2、3、4、5记录uri_handler注册状态
 
+extern const uint8_t html_start[] asm("_binary_home_html_start");
+extern const uint8_t html_end[] asm("_binary_home_html_end");
+
 #define HTTPD_SERVER_START 0x1
 #define STREAM_SERVER_START 0x2
 #define ROOT_URI_REGISTER 0x4
@@ -21,7 +24,8 @@ static uint32_t httpd_status; // 记录httpd状态 位0、1记录是否启动 �
 
 static esp_err_t root_handler(httpd_req_t *req)
 {
-    return ESP_OK;
+    httpd_resp_set_type(req, "text/html");
+    return httpd_resp_send(req, (const char *)html_start, html_end - html_start);
 }
 
 static esp_err_t jpeg_handler(httpd_req_t *req)
@@ -177,7 +181,7 @@ void doorbell_httpd_start(doorbell_httpd_handle_t doorbell_httpd_handle)
 
     ESP_LOGI(TAG, "Registering uri handlers...");
     httpd_uri_t root_uri = {
-        .uri = "/",
+        .uri = "/index",
         .method = HTTP_GET,
         .handler = root_handler,
         .is_websocket = true,

@@ -5,4 +5,6 @@ idf_component_register(SRCS
                         "doorbell_sound.c" 
                         "doorbell_main.c"
                         "doorbell_wifi.c"
-                        INCLUDE_DIRS ".")
+                        EMBED_FILES "home.html" 
+                        INCLUDE_DIRS "."
+                        )

@@ -2,7 +2,6 @@
 #define __DOORBELL_HTTPD_H__
 
 #include "esp_http_server.h"
-#include "doorbell_queue.h"
 #include "doorbell_buffer.h"
 
 typedef struct
