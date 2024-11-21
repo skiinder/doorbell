@@ -46,7 +46,8 @@
         "ringbuf.h": "c",
         "esp_audio_enc_default.h": "c",
         "esp_audio_enc.h": "c",
-        "esp_audio_dec.h": "c"
+        "esp_audio_dec.h": "c",
+        "esp_codec_dev_defaults.h": "c"
     },
     "idf.flashType": "UART",
     "idf.espIdfPathWin": "C:\\Users\\skiin\\esp\\v5.2.3\\esp-idf",

@@ -5,10 +5,6 @@
 #include "freertos/task.h"
 #include "esp_codec_dev.h"
 #include "esp_codec_dev_defaults.h"
-#include "esp_audio_enc.h"
-#include "esp_audio_enc_default.h"
-#include "esp_audio_dec.h"
-#include "esp_audio_dec_default.h"
 #include "driver/i2s_std.h"
 #include "driver/i2c.h"
 
@@ -122,8 +118,9 @@ static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan
 
 static void doorbell_sound_encoder_init(doorbell_sound_handle_t sound)
 {
+    esp_audio_enc_register_default();
     // 初始化音频编解码器
-    esp_aac_enc_config_t aac_cfg = {
+    esp_aac_enc_config_t aac_enc_cfg = {
         .sample_rate = ES8311_SAMPLE_RATE,
         .bits_per_sample = ES8311_BIT,
         .bitrate = 64000,
@@ -132,20 +129,31 @@ static void doorbell_sound_encoder_init(doorbell_sound_handle_t sound)
     };
 
     esp_audio_enc_config_t enc_cfg = {
-        .cfg = &aac_cfg,
-        .cfg_sz = sizeof(esp_alac_enc_config_t),
+        .cfg = &aac_enc_cfg,
+        .cfg_sz = sizeof(esp_aac_enc_config_t),
         .type = ESP_AUDIO_TYPE_AAC,
     };
 
     esp_audio_enc_open(&enc_cfg, &sound->enc_handle);
+    esp_audio_enc_get_info(sound->enc_handle, &sound->enc_info);
 
-    esp_aac_dec_cfg_t dec_cfg = {
+    esp_audio_dec_register_default();
+
+    esp_aac_dec_cfg_t aac_dec_cfg = {
         .sample_rate = ES8311_SAMPLE_RATE,
-        .bits_per_sample = ESP_AUDIO_BIT16,
-        .channel = ESP_AUDIO_DUAL,
-        .aac_plus_enable = false,
+        .bits_per_sample = ES8311_BIT,
+        .channel = ES8311_CHANNEL,
+        .aac_plus_enable = true,
         .no_adts_header = false,
     };
+
+    esp_audio_dec_cfg_t dec_cfg = {
+        .cfg = &aac_dec_cfg,
+        .cfg_sz = sizeof(esp_aac_dec_cfg_t),
+        .type = ESP_AUDIO_TYPE_AAC,
+    };
+
+    esp_audio_dec_open(&dec_cfg, &sound->dec_handle);
 }
 static void mic_sync_task(void *args)
 {
@@ -160,7 +168,7 @@ static void mic_sync_task(void *args)
     {
         if (esp_codec_dev_read(sound->codec_dev, buf, MIC_MESSAGE_LEN) == ESP_CODEC_DEV_OK)
         {
-            xRingbufferSend(sound->mic_ringbuf, buf, MIC_MESSAGE_LEN, portMAX_DELAY);
+            assert(xRingbufferSend(sound->mic_ringbuf, buf, MIC_MESSAGE_LEN, portMAX_DELAY) == pdTRUE);
         }
         else
         {
@@ -174,12 +182,11 @@ MIC_TASK_FAIL:
 static void speaker_sync_task(void *args)
 {
     doorbell_sound_obj *sound = args;
-    size_t len;
-    void *buf;
+    size_t len = 0;
+    void *buf = NULL;
 
     while (true)
     {
-        len = 0;
         buf = xRingbufferReceive(sound->speaker_ringbuf, &len, portMAX_DELAY);
         if (buf)
         {
@@ -210,6 +217,7 @@ esp_err_t doorbell_sound_init(doorbell_sound_handle_t *handle,
     doorbell_sound_codec_init(speaker_handle, mic_handle, sound);
     sound->mic_ringbuf = mic_ringbuf;
     sound->speaker_ringbuf = speaker_ringbuf;
+    // doorbell_sound_encoder_init(sound);
 
     return ESP_OK;
 }

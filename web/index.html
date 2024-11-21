@@ -49,27 +49,27 @@
 
     // 模拟数据
     let testData = {
-      'content-type': "test-type",
-      id: 1,
-      temperature: 15
+      "connection_type": 2,
+      id: '0088',
+      temperature: '0F'
     }
 
 
-    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); // 使用 MQTT.js 连接 Broker
+    const client = mqtt.connect('ws://172.17.0.153:1883'); // 使用 MQTT.js 连接 Broker
 
     // 绑定监听
     client.on('connect', () => {
       // 订阅消息队列1
-      client.subscribe('test/1', (err) => {
+      client.subscribe('PUSH_TOPIC', (err) => {
         if (!err) {
-          console.log('Subscribed to test/topic');
+          console.log('Subscribed to PUSH_TOPIC');
         }
 
         // 发消息给消息队列1 测试已通
         sendMessage(JSON.stringify({
-          "content-type": 'test/1',
-          id: 1,
-          msg: 15
+          "connection_type": 2,
+          'id': '0088',
+          'data': '0F'
         }))
       });
 
@@ -80,12 +80,12 @@
     client.on('message', (topic, message) => {
       console.log(JSON.parse(message.toString()));
       let testData = JSON.parse(message.toString());
-      msgNode.textContent = testData.msg;
+      msgNode.textContent = testData.data;
       // client.end();
     });
 
     // 给指定的消息队列发送数据
-    function sendMessage(message, queueName='test/1') {
+    function sendMessage(message, queueName='PUSH_TOPIC') {
       // 消息队列名字可以随时改： test/1, message:发送的消息数据
       client.publish(queueName, message);
       console.log(`发送消息给${queueName}队列`);
@@ -94,18 +94,18 @@
     /* 开灯 */
     btn1Node.addEventListener('click', () => {
       sendMessage(JSON.stringify({
-        'cotent-type': 'test/1',
-        id: 1,
-        msg: 1
-      }), '消息队列名字1')
+        'connection_type': 2,
+        'id': '0088',
+        'data': '31'
+      }), 'PULL_TOPIC')
     })
     /* 关灯 */
     btn2Node.addEventListener('click', () => {
       sendMessage(JSON.stringify({
-        'cotent-type': 'test/1',
-        id: 1,
-        msg: 0
-      }), '消息队列名字2')
+        'connection_type': 2,
+        'id': '0088',
+        'data': '30'
+      }), 'PULL_TOPIC')
     })
 
 

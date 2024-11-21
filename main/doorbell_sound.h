@@ -6,6 +6,10 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "esp_codec_dev.h"
+#include "esp_audio_enc.h"
+#include "esp_audio_enc_default.h"
+#include "esp_audio_dec.h"
+#include "esp_audio_dec_default.h"
 #include "freertos/ringbuf.h"
 
 typedef struct
@@ -15,6 +19,7 @@ typedef struct
     esp_codec_dev_handle_t codec_dev;
     esp_codec_dev_sample_info_t sample_info;
     esp_audio_enc_info_t enc_info;
+    esp_audio_dec_info_t dec_info;
     esp_audio_enc_handle_t enc_handle;
     esp_audio_dec_handle_t dec_handle;
     RingbufHandle_t mic_ringbuf;
