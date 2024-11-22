@@ -13,8 +13,8 @@
 #define ES8311_SAMPLE_RATE 16000
 #define ES8311_MCLK_MULTIPLE I2S_MCLK_MULTIPLE_256
 #define ES8311_MCLK_FREQ_HZ (ES8311_SAMPLE_RATE * ES8311_MCLK_MULTIPLE)
-#define ES8311_CHANNEL ESP_AUDIO_MONO
-#define ES8311_BIT ESP_AUDIO_BIT16
+#define ES8311_CHANNEL 1
+#define ES8311_BIT 16
 
 #define MIC_MESSAGE_LEN 2040
 
@@ -116,45 +116,6 @@ static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan
     ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(sound->codec_dev, 30.0));
 }
 
-static void doorbell_sound_encoder_init(doorbell_sound_handle_t sound)
-{
-    esp_audio_enc_register_default();
-    // 初始化音频编解码器
-    esp_aac_enc_config_t aac_enc_cfg = {
-        .sample_rate = ES8311_SAMPLE_RATE,
-        .bits_per_sample = ES8311_BIT,
-        .bitrate = 64000,
-        .channel = ES8311_CHANNEL,
-        .adts_used = true,
-    };
-
-    esp_audio_enc_config_t enc_cfg = {
-        .cfg = &aac_enc_cfg,
-        .cfg_sz = sizeof(esp_aac_enc_config_t),
-        .type = ESP_AUDIO_TYPE_AAC,
-    };
-
-    esp_audio_enc_open(&enc_cfg, &sound->enc_handle);
-    esp_audio_enc_get_info(sound->enc_handle, &sound->enc_info);
-
-    esp_audio_dec_register_default();
-
-    esp_aac_dec_cfg_t aac_dec_cfg = {
-        .sample_rate = ES8311_SAMPLE_RATE,
-        .bits_per_sample = ES8311_BIT,
-        .channel = ES8311_CHANNEL,
-        .aac_plus_enable = true,
-        .no_adts_header = false,
-    };
-
-    esp_audio_dec_cfg_t dec_cfg = {
-        .cfg = &aac_dec_cfg,
-        .cfg_sz = sizeof(esp_aac_dec_cfg_t),
-        .type = ESP_AUDIO_TYPE_AAC,
-    };
-
-    esp_audio_dec_open(&dec_cfg, &sound->dec_handle);
-}
 static void mic_sync_task(void *args)
 {
     doorbell_sound_obj *sound = args;
