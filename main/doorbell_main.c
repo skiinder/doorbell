@@ -23,8 +23,8 @@ void app_main()
     ESP_LOGI("main", "Booting...");
 
     // 初始化队列
-    mic_ringbuf = xRingbufferCreate(16384, RINGBUF_TYPE_NOSPLIT);
-    speaker_ringbuf = xRingbufferCreate(16384, RINGBUF_TYPE_NOSPLIT);
+    mic_ringbuf = xRingbufferCreate(65536, RINGBUF_TYPE_NOSPLIT);
+    speaker_ringbuf = xRingbufferCreate(65536, RINGBUF_TYPE_NOSPLIT);
 
     assert(mic_ringbuf);
     assert(speaker_ringbuf);

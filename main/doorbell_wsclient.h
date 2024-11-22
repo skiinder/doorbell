@@ -5,13 +5,10 @@
 #include "esp_websocket_client.h"
 #include "freertos/ringbuf.h"
 
-typedef struct
-{
-    char* url;
-} doorbell_wsclient_t;
-
 void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_buffer);
 
-void doorbell_wsclient_send_data(void *data, size_t len);
+void doorbell_wsclient_start();
+
+void doorbell_wsclient_switch_talking();
 
 #endif // __DOORBELL_WSCLIENT_H__
