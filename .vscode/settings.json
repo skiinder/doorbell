@@ -47,12 +47,14 @@
         "esp_audio_enc_default.h": "c",
         "esp_audio_enc.h": "c",
         "esp_audio_dec.h": "c",
-        "esp_codec_dev_defaults.h": "c"
+        "esp_codec_dev_defaults.h": "c",
+        "cjson.h": "c",
+        "scheme_ble.h": "c"
     },
     "idf.flashType": "UART",
     "idf.espIdfPathWin": "C:\\Users\\skiin\\esp\\v5.2.3\\esp-idf",
     "idf.pythonBinPathWin": "C:\\Espressif\\python_env\\idf5.2_py3.11_env\\Scripts\\python.exe",
     "idf.toolsPathWin": "C:\\Espressif",
     "idf.gitPathWin": "C:\\Espressif\\tools\\idf-git\\2.39.2\\cmd\\git.exe",
-    "idf.portWin": "COM3"
+    "idf.portWin": "COM36"
 }

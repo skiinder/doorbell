@@ -20,10 +20,6 @@
 #define CAM_PIN_HREF 39
 #define CAM_PIN_PCLK 34
 
-// 共享WiFi的用户名和密码
-#define WIFI_SSID "atguigu"
-#define WIFI_PASSWORD "aqswdefr"
-
 // 音频配置
 #define I2C_NUM 0
 #define I2C_SCL_IO 1

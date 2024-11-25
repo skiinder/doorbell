@@ -11,8 +11,8 @@ typedef struct
 {
     esp_websocket_client_handle_t cam_handle;
     esp_websocket_client_handle_t sound_handle;
-    RingbufferType_t mic_buffer;
-    RingbufferType_t speaker_buffer;
+    RingbufHandle_t mic_buffer;
+    RingbufHandle_t speaker_buffer;
     bool talking;
 } doorbell_wsclient_obj;
 
@@ -96,7 +96,7 @@ static void doorbell_wsclient_cam_task(void *arg)
             continue;
         }
         ESP_ERROR_CHECK(doorbell_camera_getJpgFrame(&buf, &buf_len));
-        ESP_ERROR_CHECK(esp_websocket_client_send_bin(handle->cam_handle, buf, buf_len, portMAX_DELAY));
+        ESP_ERROR_CHECK(esp_websocket_client_send_bin(handle->cam_handle, (char *)buf, buf_len, portMAX_DELAY));
         doorbell_camera_freeJpgFrame(buf);
     }
     vTaskDelete(NULL);
@@ -148,8 +148,8 @@ void doorbell_wsclient_start()
 {
     esp_websocket_client_start(doorbell_wsclient_handle->cam_handle);
     esp_websocket_client_start(doorbell_wsclient_handle->sound_handle);
-    xTaskCreate(doorbell_wsclient_cam_task, "doorbell_wsclient_cam_task", 4096, NULL, 5, doorbell_wsclient_handle);
-    xTaskCreate(doorbell_wsclient_sound_task, "doorbell_wsclient_sound_task", 4096, NULL, 5, doorbell_wsclient_handle);
+    xTaskCreate(doorbell_wsclient_cam_task, "doorbell_wsclient_cam_task", 4096, NULL, 5, (void *)doorbell_wsclient_handle);
+    xTaskCreate(doorbell_wsclient_sound_task, "doorbell_wsclient_sound_task", 4096, NULL, 5, (void *)doorbell_wsclient_handle);
 }
 
 void doorbell_wsclient_switch_talking()
