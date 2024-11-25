@@ -16,6 +16,7 @@ static void wifi_connect_callback(void)
 {
     doorbell_wsclient_init(mic_ringbuf, speaker_ringbuf);
     doorbell_mqtt_init();
+    doorbell_wsclient_start();
 }
 
 static void wifi_disconnect_callback(void)
@@ -27,8 +28,8 @@ void app_main()
     ESP_LOGI("main", "Booting...");
 
     // 初始化队列
-    mic_ringbuf = xRingbufferCreate(16384, RINGBUF_TYPE_NOSPLIT);
-    speaker_ringbuf = xRingbufferCreate(16384, RINGBUF_TYPE_NOSPLIT);
+    mic_ringbuf = xRingbufferCreate(65536, RINGBUF_TYPE_NOSPLIT);
+    speaker_ringbuf = xRingbufferCreate(65536, RINGBUF_TYPE_NOSPLIT);
 
     assert(mic_ringbuf);
     assert(speaker_ringbuf);

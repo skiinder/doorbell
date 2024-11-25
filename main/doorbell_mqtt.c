@@ -1,6 +1,5 @@
 #include "doorbell_mqtt.h"
 #include "esp_log.h"
-#include "doorbell_wsclient.h"
 #include "cJSON.h"
 
 // #define MQTT_URI "ws://broker.emqx.io:8083"
@@ -9,7 +8,10 @@
 #define MQTT_PULL_TOPIC "doorbell/cmd"
 #define TAG "doorbell_mqtt"
 
-esp_mqtt_client_handle_t client;
+#define MAX_CALLBACK_COUNT 16
+
+static esp_mqtt_client_handle_t client;
+static doorbell_mqtt_callback_t mqtt_callbacks[MAX_CALLBACK_COUNT];
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
@@ -19,7 +21,37 @@ static void log_error_if_nonzero(const char *message, int error_code)
     }
 }
 
-static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
+static void doorbell_mqtt_data_handler(char *data)
+{
+    cJSON *root = cJSON_Parse(data);
+    if (!root)
+    {
+        return;
+    }
+    cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
+    if (!cJSON_IsString(cmd))
+    {
+        goto FREE_ROOT;
+    }
+    ESP_LOGI(TAG, "Received cmd: %s", cmd->valuestring);
+    for (size_t i = 0; i < MAX_CALLBACK_COUNT; i++)
+    {
+        if (strlen(mqtt_callbacks[i].cmd) == 0)
+        {
+            break;
+        }
+        if (strcmp(cmd->valuestring, mqtt_callbacks[i].cmd) == 0)
+        {
+            ESP_LOGI(TAG, "Cmd %s callback matched, executing", cmd->valuestring);
+            mqtt_callbacks[i].callback(mqtt_callbacks[i].arg);
+            break;
+        }
+    }
+FREE_ROOT:
+    cJSON_Delete(root);
+}
+
+static void doorbell_mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32, base, event_id);
     esp_mqtt_event_handle_t event = event_data;
@@ -36,7 +68,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
         break;
-    
+
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
         msg_id = esp_mqtt_client_publish(client, MQTT_PUSH_TOPIC, "hello", 6, 0, 0);
@@ -47,17 +79,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
 
-        cJSON *root = cJSON_Parse(event->data);
-        if (root)
-        {
-            cJSON *cmd = cJSON_GetObjectItem(root, "cmd");
-            if (cJSON_IsString(cmd) && strcmp("switch", cmd->valuestring) == 0)
-            {
-                doorbell_wsclient_switch_talking();
-                ESP_LOGI(TAG, "switch command received");
-            }
-            cJSON_Delete(root);
-        }
+        doorbell_mqtt_data_handler(event->data);
 
         break;
     case MQTT_EVENT_ERROR:
@@ -82,6 +104,28 @@ void doorbell_mqtt_init(void)
         .broker.address.uri = MQTT_URI,
     };
     client = esp_mqtt_client_init(&cfg);
-    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    memset(mqtt_callbacks, 0, sizeof(mqtt_callbacks));
+    esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, doorbell_mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
+}
+
+void doorbell_mqtt_register_callback(doorbell_mqtt_callback_t *callback)
+{
+    size_t i;
+    for (i = 0; i < MAX_CALLBACK_COUNT; i++)
+    {
+        if (strlen(mqtt_callbacks[i].cmd) == 0)
+        {
+            break;
+        }
+        if (strcmp(mqtt_callbacks[i].cmd, callback->cmd) == 0)
+        {
+            ESP_LOGW(TAG, "callback for %s already registered, overwrited.", callback->cmd);
+            break;
+        }
+    }
+    if (i < MAX_CALLBACK_COUNT)
+    {
+        memcpy(mqtt_callbacks + i, callback, sizeof(doorbell_mqtt_callback_t));
+    }
 }

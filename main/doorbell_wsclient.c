@@ -1,9 +1,10 @@
 #include "doorbell_wsclient.h"
 #include "esp_log.h"
 #include "doorbell_camera.h"
+#include "doorbell_mqtt.h"
 
-#define CAM_URI "ws://example.com:80"
-#define SND_URI "ws://example.com:81"
+#define CAM_URI "ws://192.168.137.155:8000/ws/image"
+#define SND_URI "ws://192.168.137.155:8000/ws/from_esp"
 
 static const char *TAG = "websocket";
 
@@ -11,6 +12,8 @@ typedef struct
 {
     esp_websocket_client_handle_t cam_handle;
     esp_websocket_client_handle_t sound_handle;
+    TaskHandle_t cam_task;
+    TaskHandle_t sound_task;
     RingbufHandle_t mic_buffer;
     RingbufHandle_t speaker_buffer;
     bool talking;
@@ -53,7 +56,8 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
         if (data->op_code == 0x2)
         {
             // 收到二进制数据
-            if (data->client == doorbell_wsclient_handle->sound_handle)
+            if (data->client == doorbell_wsclient_handle->sound_handle &&
+                doorbell_wsclient_handle->talking)
             {
                 xRingbufferSend(doorbell_wsclient_handle->speaker_buffer, data->data_ptr, data->data_len, portMAX_DELAY);
             }
@@ -96,7 +100,7 @@ static void doorbell_wsclient_cam_task(void *arg)
             continue;
         }
         ESP_ERROR_CHECK(doorbell_camera_getJpgFrame(&buf, &buf_len));
-        ESP_ERROR_CHECK(esp_websocket_client_send_bin(handle->cam_handle, (char *)buf, buf_len, portMAX_DELAY));
+        esp_websocket_client_send_bin(handle->cam_handle, (char *)buf, buf_len, portMAX_DELAY);
         doorbell_camera_freeJpgFrame(buf);
     }
     vTaskDelete(NULL);
@@ -117,13 +121,17 @@ static void doorbell_wsclient_sound_task(void *arg)
         buf = xRingbufferReceive(handle->mic_buffer, &buf_len, portMAX_DELAY);
         if (buf)
         {
-            ESP_ERROR_CHECK(esp_websocket_client_send_bin(handle->sound_handle, buf, buf_len, portMAX_DELAY));
+            esp_websocket_client_send_bin(handle->sound_handle, buf, buf_len, portMAX_DELAY);
             vRingbufferReturnItem(handle->mic_buffer, buf);
         }
     }
     vTaskDelete(NULL);
 }
 
+static void doorbell_wsclient_switch_talking(void *arg)
+{
+    doorbell_wsclient_handle->talking = !doorbell_wsclient_handle->talking;
+}
 void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_buffer)
 {
     doorbell_wsclient_handle = malloc(sizeof(doorbell_wsclient_obj));
@@ -142,17 +150,19 @@ void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_
 
     esp_websocket_register_events(doorbell_wsclient_handle->cam_handle, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)doorbell_wsclient_handle);
     esp_websocket_register_events(doorbell_wsclient_handle->sound_handle, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)doorbell_wsclient_handle);
+
+    doorbell_mqtt_callback_t cb = {
+        .cmd = "switch",
+        .callback = doorbell_wsclient_switch_talking,
+        .arg = NULL,
+    };
+    doorbell_mqtt_register_callback(&cb);
 }
 
 void doorbell_wsclient_start()
 {
     esp_websocket_client_start(doorbell_wsclient_handle->cam_handle);
     esp_websocket_client_start(doorbell_wsclient_handle->sound_handle);
-    xTaskCreate(doorbell_wsclient_cam_task, "doorbell_wsclient_cam_task", 4096, NULL, 5, (void *)doorbell_wsclient_handle);
-    xTaskCreate(doorbell_wsclient_sound_task, "doorbell_wsclient_sound_task", 4096, NULL, 5, (void *)doorbell_wsclient_handle);
-}
-
-void doorbell_wsclient_switch_talking()
-{
-    doorbell_wsclient_handle->talking = !doorbell_wsclient_handle->talking;
+    xTaskCreate(doorbell_wsclient_cam_task, "doorbell_wsclient_cam_task", 4096, (void *)doorbell_wsclient_handle, 5, &doorbell_wsclient_handle->cam_task);
+    xTaskCreate(doorbell_wsclient_sound_task, "doorbell_wsclient_sound_task", 4096, (void *)doorbell_wsclient_handle, 5, &doorbell_wsclient_handle->sound_task);
 }

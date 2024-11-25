@@ -16,7 +16,7 @@
 #define ES8311_CHANNEL 1
 #define ES8311_BIT 16
 
-#define MIC_MESSAGE_LEN 2040
+#define MIC_MESSAGE_LEN 4088
 
 static void doorbell_board_i2c_init()
 {
@@ -185,8 +185,8 @@ esp_err_t doorbell_sound_init(doorbell_sound_handle_t *handle,
 
 void doorbell_sound_start(doorbell_sound_handle_t handle)
 {
-    assert(xTaskCreate(speaker_sync_task, "speaker_task", 4096, handle, 1, &handle->speaker_sync_task) == pdTRUE);
-    assert(xTaskCreate(mic_sync_task, "mic_task", 4096, handle, 1, &handle->mic_sync_task) == pdTRUE);
+    assert(xTaskCreate(speaker_sync_task, "speaker_task", 4096, handle, 5, &handle->speaker_sync_task) == pdTRUE);
+    assert(xTaskCreate(mic_sync_task, "mic_task", 4096, handle, 5, &handle->mic_sync_task) == pdTRUE);
 }
 
 void doorbell_sound_stop(doorbell_sound_handle_t handle)

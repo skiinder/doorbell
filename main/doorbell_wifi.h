@@ -4,7 +4,7 @@
 #include "esp_wifi.h"
 
 #define WIFI_PROV_RETRY_COUNT 5
-#define RESET_PROVISIONED 1
+#define RESET_PROVISIONED 0
 #define PROV_QR_VERSION "v1"
 #define PROV_TRANSPORT_BLE "ble"
 #define QRCODE_BASE_URL "https://espressif.github.io/esp-jumpstart/qrcode.html"
