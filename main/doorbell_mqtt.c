@@ -71,7 +71,7 @@ static void doorbell_mqtt_event_handler(void *handler_args, esp_event_base_t bas
 
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-        msg_id = esp_mqtt_client_publish(client, MQTT_PUSH_TOPIC, "hello", 6, 0, 0);
+        msg_id = esp_mqtt_client_publish(client, MQTT_PUSH_TOPIC, "hello", 5, 0, 0);
         break;
 
     case MQTT_EVENT_DATA:
@@ -104,7 +104,6 @@ void doorbell_mqtt_init(void)
         .broker.address.uri = MQTT_URI,
     };
     client = esp_mqtt_client_init(&cfg);
-    memset(mqtt_callbacks, 0, sizeof(mqtt_callbacks));
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, doorbell_mqtt_event_handler, NULL);
     esp_mqtt_client_start(client);
 }

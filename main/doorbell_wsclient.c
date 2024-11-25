@@ -100,7 +100,8 @@ static void doorbell_wsclient_cam_task(void *arg)
             continue;
         }
         ESP_ERROR_CHECK(doorbell_camera_getJpgFrame(&buf, &buf_len));
-        esp_websocket_client_send_bin(handle->cam_handle, (char *)buf, buf_len, portMAX_DELAY);
+        int ret = esp_websocket_client_send_bin(handle->cam_handle, (char *)buf, buf_len, portMAX_DELAY);
+        ESP_LOGI("cam_task", "Send bin: %d", ret);
         doorbell_camera_freeJpgFrame(buf);
     }
     vTaskDelete(NULL);
