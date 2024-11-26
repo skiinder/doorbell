@@ -128,3 +128,8 @@ void doorbell_mqtt_register_callback(doorbell_mqtt_callback_t *callback)
         memcpy(mqtt_callbacks + i, callback, sizeof(doorbell_mqtt_callback_t));
     }
 }
+
+void doorbell_mqtt_publish(char *payload)
+{
+    esp_mqtt_client_publish(client, MQTT_PUSH_TOPIC, payload, strlen(payload), 0, 0);
+}

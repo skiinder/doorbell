@@ -14,4 +14,6 @@ void doorbell_mqtt_init(void);
 
 void doorbell_mqtt_register_callback(doorbell_mqtt_callback_t *callback);
 
+void doorbell_mqtt_publish(char *payload);
+
 #endif // __DOORBELL_MQTT_H__

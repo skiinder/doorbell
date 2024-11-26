@@ -16,7 +16,6 @@ static void wifi_connect_callback(void)
 {
     doorbell_wsclient_init(mic_ringbuf, speaker_ringbuf);
     doorbell_mqtt_init();
-    doorbell_wsclient_start();
 }
 
 static void wifi_disconnect_callback(void)

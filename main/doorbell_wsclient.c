@@ -132,6 +132,19 @@ static void doorbell_wsclient_sound_task(void *arg)
 static void doorbell_wsclient_switch_talking(void *arg)
 {
     doorbell_wsclient_handle->talking = !doorbell_wsclient_handle->talking;
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    if (doorbell_wsclient_handle->talking)
+    {
+        doorbell_wsclient_start();
+    }
+    else
+    {
+        doorbell_wsclient_stop();
+    }
+
+    char msg[64];
+    sprintf(msg, "{\"streaming_status\":%s}", doorbell_wsclient_handle->talking ? "true" : "false");
+    doorbell_mqtt_publish(msg);
 }
 void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_buffer)
 {
@@ -166,4 +179,14 @@ void doorbell_wsclient_start()
     esp_websocket_client_start(doorbell_wsclient_handle->sound_handle);
     xTaskCreate(doorbell_wsclient_cam_task, "doorbell_wsclient_cam_task", 4096, (void *)doorbell_wsclient_handle, 5, &doorbell_wsclient_handle->cam_task);
     xTaskCreate(doorbell_wsclient_sound_task, "doorbell_wsclient_sound_task", 4096, (void *)doorbell_wsclient_handle, 5, &doorbell_wsclient_handle->sound_task);
+}
+
+void doorbell_wsclient_stop()
+{
+    ESP_LOGI(TAG, "Stop Tasks");
+    vTaskDelete(doorbell_wsclient_handle->cam_task);
+    vTaskDelete(doorbell_wsclient_handle->sound_task);
+    ESP_LOGI(TAG, "Stop websocket client");
+    esp_websocket_client_close(doorbell_wsclient_handle->cam_handle, 0);
+    esp_websocket_client_close(doorbell_wsclient_handle->sound_handle, 0);
 }
