@@ -42,8 +42,12 @@ static void doorbell_mqtt_data_handler(char *data)
         }
         if (strcmp(cmd->valuestring, mqtt_callbacks[i].cmd) == 0)
         {
-            ESP_LOGI(TAG, "Cmd %s callback matched, executing", cmd->valuestring);
-            mqtt_callbacks[i].callback(mqtt_callbacks[i].arg);
+            ESP_LOGI(TAG, "Cmd %s callback matched, creating task", cmd->valuestring);
+            if (xTaskCreate(mqtt_callbacks[i].callback, mqtt_callbacks[i].cmd, 4096, mqtt_callbacks[i].arg, 2, NULL) == pdFALSE)
+            {
+                ESP_LOGE(TAG, "Failed to create task %s", cmd->valuestring);
+            }
+            // mqtt_callbacks[i].callback(mqtt_callbacks[i].arg);
             break;
         }
     }

@@ -35,4 +35,6 @@
 
 #define PA_PIN 46
 
+#define SERVER_URL "192.168.1.101"
+
 #endif

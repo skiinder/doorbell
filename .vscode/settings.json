@@ -50,7 +50,12 @@
         "esp_codec_dev_defaults.h": "c",
         "cjson.h": "c",
         "scheme_ble.h": "c",
-        "esp_websocket_client.h": "c"
+        "esp_websocket_client.h": "c",
+        "doorbell_mqtt.h": "c",
+        "mqtt_client.h": "c",
+        "esp_http_client.h": "c",
+        "esp_https_ota.h": "c",
+        "esp_crt_bundle.h": "c"
     },
     "idf.flashType": "UART",
     "idf.espIdfPathWin": "C:\\Users\\skiin\\esp\\v5.2.3\\esp-idf",

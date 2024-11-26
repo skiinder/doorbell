@@ -1,10 +1,11 @@
 #include "doorbell_wsclient.h"
 #include "esp_log.h"
 #include "doorbell_camera.h"
+#include "doorbell_config.h"
 #include "doorbell_mqtt.h"
 
-#define CAM_URI "ws://192.168.137.155:8000/ws/image"
-#define SND_URI "ws://192.168.137.155:8000/ws/from_esp"
+static const char* cam_uri = "ws://" SERVER_URL ":8000/ws/image";
+static const char* sound_uri = "ws://" SERVER_URL ":8000/ws/from_esp";
 
 static const char *TAG = "websocket";
 
@@ -145,6 +146,7 @@ static void doorbell_wsclient_switch_talking(void *arg)
     char msg[64];
     sprintf(msg, "{\"streaming_status\":%s}", doorbell_wsclient_handle->talking ? "true" : "false");
     doorbell_mqtt_publish(msg);
+    vTaskDelete(NULL);
 }
 void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_buffer)
 {
@@ -156,10 +158,10 @@ void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_
     doorbell_wsclient_handle->talking = false;
 
     esp_websocket_client_config_t cfg = {
-        .uri = CAM_URI,
+        .uri = cam_uri,
     };
     doorbell_wsclient_handle->cam_handle = esp_websocket_client_init(&cfg);
-    cfg.uri = SND_URI;
+    cfg.uri = sound_uri;
     doorbell_wsclient_handle->sound_handle = esp_websocket_client_init(&cfg);
 
     esp_websocket_register_events(doorbell_wsclient_handle->cam_handle, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)doorbell_wsclient_handle);

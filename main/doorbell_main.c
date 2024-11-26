@@ -6,6 +6,8 @@
 #include "freertos/queue.h"
 #include "doorbell_wsclient.h"
 #include "doorbell_mqtt.h"
+#include "doorbell_ota.h"
+#include "esp_ota_ops.h"
 
 static doorbell_sound_handle_t doorbell_sound;
 
@@ -33,7 +35,6 @@ void app_main()
     assert(mic_ringbuf);
     assert(speaker_ringbuf);
 
-
     // 初始化WiFi
     doorbell_wifi_init(wifi_connect_callback, wifi_disconnect_callback);
 
@@ -44,4 +45,9 @@ void app_main()
 
     doorbell_sound_start(doorbell_sound);
     doorbell_wifi_start();
+    doorbell_ota_init();
+
+    vTaskDelay(30000 / portTICK_PERIOD_MS);
+    // 超过30s，确认程序可行性
+    doorbell_ota_confirm();
 }
