@@ -55,7 +55,14 @@
         "mqtt_client.h": "c",
         "esp_http_client.h": "c",
         "esp_https_ota.h": "c",
-        "esp_crt_bundle.h": "c"
+        "esp_crt_bundle.h": "c",
+        "iot_button.h": "c",
+        "sdkconfig.h": "c",
+        "button_matrix.h": "c",
+        "led_strip.h": "c",
+        "led_strip_spi.h": "c",
+        "button_adc.h": "c",
+        "button_gpio.h": "c"
     },
     "idf.flashType": "UART",
     "idf.espIdfPathWin": "C:\\Users\\skiin\\esp\\v5.2.3\\esp-idf",

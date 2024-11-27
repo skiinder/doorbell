@@ -6,6 +6,8 @@
 #include "freertos/queue.h"
 #include "doorbell_wsclient.h"
 #include "doorbell_mqtt.h"
+#include "doorbell_button.h"
+#include "doorbell_led.h"
 #include "doorbell_ota.h"
 #include "esp_ota_ops.h"
 
@@ -27,6 +29,7 @@ static void wifi_disconnect_callback(void)
 void app_main()
 {
     ESP_LOGI("main", "Booting...");
+    doorbell_button_init();
 
     // 初始化队列
     mic_ringbuf = xRingbufferCreate(65536, RINGBUF_TYPE_NOSPLIT);
@@ -46,6 +49,7 @@ void app_main()
     doorbell_sound_start(doorbell_sound);
     doorbell_wifi_start();
     doorbell_ota_init();
+    doorbell_led_init();
 
     vTaskDelay(30000 / portTICK_PERIOD_MS);
     // 超过30s，确认程序可行性

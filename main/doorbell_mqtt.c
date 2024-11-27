@@ -21,6 +21,13 @@ static void log_error_if_nonzero(const char *message, int error_code)
     }
 }
 
+static void doorbell_mqtt_executor(void *arg)
+{
+    doorbell_mqtt_callback_t *cb = arg;
+    cb->callback(cb->arg);
+    vTaskDelete(NULL);
+}
+
 static void doorbell_mqtt_data_handler(char *data)
 {
     cJSON *root = cJSON_Parse(data);
@@ -43,7 +50,7 @@ static void doorbell_mqtt_data_handler(char *data)
         if (strcmp(cmd->valuestring, mqtt_callbacks[i].cmd) == 0)
         {
             ESP_LOGI(TAG, "Cmd %s callback matched, creating task", cmd->valuestring);
-            if (xTaskCreate(mqtt_callbacks[i].callback, mqtt_callbacks[i].cmd, 4096, mqtt_callbacks[i].arg, 2, NULL) == pdFALSE)
+            if (xTaskCreate(doorbell_mqtt_executor, mqtt_callbacks[i].cmd, 4096, mqtt_callbacks + i, 2, NULL) == pdFALSE)
             {
                 ESP_LOGE(TAG, "Failed to create task %s", cmd->valuestring);
             }

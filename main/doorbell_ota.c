@@ -66,7 +66,6 @@ static void doorbell_ota_process(void *arg)
     {
         ESP_LOGE(TAG, "Firmware upgrade failed");
     }
-    vTaskDelete(NULL);
 }
 void doorbell_ota_init()
 {

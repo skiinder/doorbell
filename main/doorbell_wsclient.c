@@ -3,6 +3,8 @@
 #include "doorbell_camera.h"
 #include "doorbell_config.h"
 #include "doorbell_mqtt.h"
+#include "doorbell_led.h"
+#include "doorbell_sound.h"
 
 static const char* cam_uri = "ws://" SERVER_URL ":8000/ws/image";
 static const char* sound_uri = "ws://" SERVER_URL ":8000/ws/from_esp";
@@ -136,17 +138,18 @@ static void doorbell_wsclient_switch_talking(void *arg)
     vTaskDelay(100 / portTICK_PERIOD_MS);
     if (doorbell_wsclient_handle->talking)
     {
+        doorbell_led_on();
         doorbell_wsclient_start();
     }
     else
     {
+        doorbell_led_off();
         doorbell_wsclient_stop();
     }
 
     char msg[64];
-    sprintf(msg, "{\"streaming_status\":%s}", doorbell_wsclient_handle->talking ? "true" : "false");
+    sprintf(msg, "{\"doorbell_status\":%s}", doorbell_wsclient_handle->talking ? "start_streaming" : "stop_streaming");
     doorbell_mqtt_publish(msg);
-    vTaskDelete(NULL);
 }
 void doorbell_wsclient_init(RingbufHandle_t mic_buffer, RingbufHandle_t speaker_buffer)
 {

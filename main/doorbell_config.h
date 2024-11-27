@@ -35,6 +35,12 @@
 
 #define PA_PIN 46
 
+#define SW2 45
+#define SW2812_PIN 47
+#define FLASH_PIN 48
+
+#define VBAT_VAL_PIN 8
+
 #define SERVER_URL "192.168.1.101"
 
 #endif

@@ -7,6 +7,8 @@
 #include "esp_codec_dev_defaults.h"
 #include "driver/i2s_std.h"
 #include "driver/i2c.h"
+#include "doorbell_button.h"
+#include "doorbell_mqtt.h"
 
 #define TAG "doorbell_sound"
 #define ES8311_VOLUME 80
@@ -17,6 +19,9 @@
 #define ES8311_BIT 16
 
 #define MIC_MESSAGE_LEN 4088
+
+extern const uint8_t output_pcm_start[] asm("_binary_output_pcm_start");
+extern const uint8_t output_pcm_end[] asm("_binary_output_pcm_end");
 
 static void doorbell_board_i2c_init()
 {
@@ -64,6 +69,13 @@ static void doorbell_sound_i2s_init(i2s_chan_handle_t *speaker_handle, i2s_chan_
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(*mic_handle, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(*speaker_handle));
     ESP_ERROR_CHECK(i2s_channel_enable(*mic_handle));
+}
+
+static void doorbell_sound_dingdong(void *arg)
+{
+    doorbell_sound_handle_t sound = arg;
+    doorbell_mqtt_publish("{\"doorbell_status\":\"dingdong\"}");
+    esp_codec_dev_write(sound->codec_dev, (void *)output_pcm_start, output_pcm_end - output_pcm_start);
 }
 
 static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan_handle_t mic_handle, doorbell_sound_handle_t sound)
@@ -114,6 +126,12 @@ static void doorbell_sound_codec_init(i2s_chan_handle_t speaker_handle, i2s_chan
     sound->sample_info.channel_mask = ESP_CODEC_DEV_MAKE_CHANNEL_MASK(0);
     ESP_ERROR_CHECK(esp_codec_dev_open(sound->codec_dev, &sound->sample_info));
     ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(sound->codec_dev, 30.0));
+
+    doorbell_button_func_t func = {
+        .callback = doorbell_sound_dingdong,
+        .arg = sound,
+    };
+    doorbell_button_register_callback(BUTTON_SW2, BUTTON_SINGLE_CLICK, &func);
 }
 
 static void mic_sync_task(void *args)
